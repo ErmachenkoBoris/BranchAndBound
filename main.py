@@ -1,18 +1,48 @@
-from multiprocessing import Process
+import multiprocessing
 import urllib.request
 import numpy as np
 import time
 import cplex
 
-timeLimitValue = 900
+timeLimitValue = 1
+delta = 0.00001
+local = True
 
 paths = [
-     'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/C125.9.clq',
+      'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/C125.9.clq',
     # 'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/brock200_2.clq',
-    # 'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/keller4.clq'
+    #  'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/keller4.clq'
 ]
 
+localPath = [
+    'graphs/c-fat200-1.clq',
+    'graphs/c-fat200-2.clq',
+    'graphs/c-fat200-5.clq',
+    'graphs/c-fat500-1.clq',
+    'graphs/c-fat500-10.clq',
+    'graphs/c-fat500-2.clq',
+    'graphs/c-fat500-5.clq',
+    'graphs/MANN_a9.clq',
+    'graphs/hamming6-2.clq',
+    'graphs/hamming6-4.clq',
+    'graphs/gen200_p0.9_44.clq',
+    'graphs/gen200_p0.9_55.clq',
+    'graphs/san200_0.7_1.clq',
+    'graphs/san200_0.9_1.clq',
+    'graphs/san200_0.9_2.clq',
+    'graphs/san200_0.9_3.clq',
+    'graphs/sanr200_0.7.clq',
+    'graphs/C125.9.clq',
+    'graphs/keller4.clq',
+    'graphs/brock200_1.clq',
+    'graphs/brock200_2.clq',
+    'graphs/brock200_3.clq',
+    'graphs/brock200_4.clq',
+    'graphs/p_hat300-1.clq',
+    'graphs/p_hat300-2.clq'
+]
 
+# -----------------------------------------------TEST-------------------------------
 # matrixTest = np.zeros((4, 4))
 # matrixTest = np.array([
 #            [1,1,0,0],
@@ -24,22 +54,31 @@ matrixTest = np.array([
            [1,1,1,1],
           [1,1,1,1],
     [1,1,1,1]])
+# -----------------------------------------------TEST-------------------------------
+
+
 
 def openGraph(filePath):
     n = -1
     m = -1
-    file = urllib.request.urlopen(filePath)
+    global local
+    if local==True:
+        file = open(filePath)
+    else:
+        file = urllib.request.urlopen(filePath)
     for line in file:
-        line = line.decode('ascii')
-        line = line.strip('\n')
+        if local == False:
+            line = line.decode('ascii')
+            line = line.strip('\n')
         if line.startswith('p'):
             n = int(line.split(' ')[2])
             m = int(line.split(' ')[3])
             break
     graphMatrix = np.zeros((n, n))
     for line in file:
-        line = line.decode('ascii')
-        line = line.strip('\n')
+        if local == False:
+            line = line.decode('ascii')
+            line = line.strip('\n')
         if line.startswith('e'):
             i = int(line.split(' ')[1]) - 1
             j = int(line.split(' ')[2]) - 1
@@ -125,15 +164,15 @@ def findEvristicClique(maxColorCandidat, matrix, n, coloredEd):
 
 
 
-def evristic(path, index):
+def evristic(path):
 
     print('---evristic')
-    # main
     n, m, confusion_matrix = openGraph(path)
 
-    # TEST
+    # ----------------TEST
     # n = 4
     # confusion_matrix = matrixTest
+    # ----------------TEST
 
     start_evr_time = time.time()
 
@@ -188,24 +227,15 @@ def initalClickCPLEX(constrains,
                 constrainsTypes.append('L')
                 constrainsRightParts.append(1.0)
 
-    # for i in range(n):
-    #     maxCliqueModel.linear_constraints.add(
-    #         lin_expr=constrains,
-    #         rhs=constrainsRightParts,
-    #         names=constrainsNames,
-    #         senses=constrainsTypes
-    #     )
     maxCliqueModel.linear_constraints.add(
         lin_expr=constrains,
         rhs=constrainsRightParts,
         names=constrainsNames,
-        senses=constrainsTypes
-    )
+        senses=constrainsTypes)
 
     maxCliqueModel.set_log_stream(None)
     maxCliqueModel.set_warning_stream(None)
     maxCliqueModel.set_results_stream(None)
-
 
     for i in range(n):
         maxCliqueModel.objective.set_linear("y" + str(i), 1)
@@ -214,24 +244,18 @@ def initalClickCPLEX(constrains,
 
     maxCliqueModel.solve()
     values = maxCliqueModel.solution.get_values()
-    result_size = 0
-    # print('values ', values)
     result = 0
     for v in values:
         result = result + v
-
-    # print("Result: ", result)
-
-    # print("-------")
     return values
 
-
-def bnbContainer(evristicPower, evristicValues, matrix, n, graph):
+def bnbContainer(evristicPower, evristicValues, matrix, n, graph, return_dict):
     start_BNB_time = time.time()
     constrains = []
     constrainsNames = []
     constrainsTypes = []
     constrainsRightParts = []
+
     global bestDecision
 
     maxCliqueModel = cplex.Cplex()
@@ -245,55 +269,44 @@ def bnbContainer(evristicPower, evristicValues, matrix, n, graph):
         matrix,
         n, )
 
-
     bestDecision = evristicPower
-    result, resultValues = BNB(evristicValues, maxCliqueModel)
-    print('grrr ', graph)
+
+    return_dict['power'] = evristicPower
+    return_dict['values'] = evristicValues
+
+    result, resultValues = BNB(evristicValues, maxCliqueModel, return_dict)
+    print('grapth NAME ', graph)
     print("--- %s seconds BNB ---" % (time.time() - start_BNB_time))
     print('!!!!! result ', result)
     print('!!!!! resultValues ', resultValues)
 
-
-
 def bnbStartEngine(graphs):
     for i in range(len(graphs)):
-        evristicPower, evristicValues, matrix, n = evristic(graphs[i], i)
-        global timeLimitValue
+        evristicPower, evristicValues, matrix, n = evristic(graphs[i])
         if __name__ == '__main__':
+            global timeLimitValue
+            manager = multiprocessing.Manager()
+            return_dict = manager.dict()
+            return_dict['power'] = 0
+            return_dict['values'] = []
             print('start bnb for ', graphs[i])
-            p = Process(target=bnbContainer, args=[evristicPower, evristicValues, matrix, n, graphs[i]])
+            p = multiprocessing.Process(target=bnbContainer, args=(evristicPower, evristicValues, matrix, n, graphs[i], return_dict))
             p.start()
             p.join(timeLimitValue)
             if p.is_alive():
                 p.terminate()
-                print('grrr ', graphs[i])
                 print("--- %s seconds LIMIT BNB ---" % timeLimitValue)
-                print('!!!!! TIMEOUT result ', bestDecision)
-                print('!!!!! TIMEOUT resultValues ', bestDecisionVGLOBAL)
-                return False
-        #
-        # signal.signal(signal.SIGINT, signal_handler)
-        # signal.alarm(timeLimitValue)  # Ten seconds
+                print('!!!!! TIMEOUT result ', return_dict['power'] )
+                print('!!!!! TIMEOUT resultValues ', return_dict['values'])
 
-
-def numberWithDelta(number, maxValue, minVale, eps = 0.0001 ):
+def numberWithDelta(number, maxValue, minVale, eps):
     if number + eps >= maxValue:
         return maxValue
     if number - eps <= minVale:
         return minVale
     return number
 
-def addConstrain(
-        i,
-        value,
-        maxCliqueModel):
-    # constrains = []
-    # constrainsNames  = []
-    # constrainsTypes  = []
-    # constrainsRightParts  = []
-    #
-    # constrains.append([["y" + str(i)], [1]])
-
+def addConstrain(i,value,maxCliqueModel):
     maxCliqueModel.linear_constraints.add(
         lin_expr=[[["y" + str(i)], [1]]],
         rhs=[value],
@@ -305,12 +318,10 @@ def removeConstrain(i,maxCliqueModel):
     maxCliqueModel.linear_constraints.delete("constraint_" + str(i))
 
 def solveWithCPLX(maxCliqueModel):
-    # print(maxCliqueModel.linear_constraints.get_names())
     maxCliqueModel.solve()
     return maxCliqueModel.solution.get_values()
-bestDecisionVGLOBAL = []
-def BNB(bestDecisionValue, maxCliqueModel):
-    global bestDecisionVGLOBAL
+
+def BNB(bestDecisionValue, maxCliqueModel, return_dict):
     global bestDecision
     currentDecisionValue = solveWithCPLX(maxCliqueModel)
     N = len(currentDecisionValue)
@@ -320,19 +331,14 @@ def BNB(bestDecisionValue, maxCliqueModel):
     for i in range(N):
         currentDecision = currentDecision + currentDecisionValue[i]
 
-    # print('currentDecisionValue ', currentDecisionValue)
-    # print('currentDecision ', currentDecision)
-    # print('bestDecision ', bestDecision)
-
-    if currentDecision <= bestDecision:
-        # print('OLD bestDecision ', bestDecision)
+    global delta
+    if currentDecision - delta <= bestDecision or currentDecision + delta <= bestDecision:
         return bestDecision, bestDecisionValue
 
     flag = False
     for index in range(N):
-        currentDecisionValue[index] = numberWithDelta(currentDecisionValue[index], 1, 0)
+        currentDecisionValue[index] = numberWithDelta(currentDecisionValue[index], 1, 0, delta)
         if currentDecisionValue[index] !=0 and currentDecisionValue[index] !=1:
-            # print('baad ', currentDecisionValue[index])
             flag = True
             break
     if index == N - 1 and flag == False:
@@ -341,26 +347,27 @@ def BNB(bestDecisionValue, maxCliqueModel):
             print('new bestDecision ', bestDecision, currentDecision)
 
             bestDecision = currentDecision
-            bestDecisionVGLOBAL = currentDecisionValue
             bestDecisionValue = currentDecisionValue
 
-            # print('new !!!! ', bestDecision, currentDecision)
+            return_dict['power'] = bestDecision
+            return_dict['values'] = bestDecisionValue
+
         return bestDecision, bestDecisionValue
 
 
     addConstrain(index, 1, maxCliqueModel)
 
-    BNB(bestDecisionValue, maxCliqueModel)
+    BNB(bestDecisionValue, maxCliqueModel, return_dict)
 
     removeConstrain(index, maxCliqueModel)
 
     addConstrain(index, 0, maxCliqueModel)
 
-    BNB(bestDecisionValue, maxCliqueModel)
+    BNB(bestDecisionValue, maxCliqueModel, return_dict)
 
     removeConstrain(index, maxCliqueModel)
 
 bestDecision = 0
 # MAIN
 if __name__ == '__main__':
-    bnbStartEngine(paths)
+    bnbStartEngine(localPath)
