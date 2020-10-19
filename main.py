@@ -4,17 +4,19 @@ import numpy as np
 import time
 import cplex
 
-timeLimitValue = 1
+# GLOBAL
+timeLimitValue = 3600
 delta = 0.00001
 local = True
+bestDecision = 0
 
 paths = [
       'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/C125.9.clq',
-    # 'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/brock200_2.clq',
-    #  'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/keller4.clq'
+    'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/brock200_2.clq',
+     'http://iridia.ulb.ac.be/~fmascia/files/DIMACS/keller4.clq'
 ]
 
-localPath = [
+localPaths = [
     'graphs/c-fat200-1.clq',
     'graphs/c-fat200-2.clq',
     'graphs/c-fat200-5.clq',
@@ -42,6 +44,23 @@ localPath = [
     'graphs/p_hat300-2.clq'
 ]
 
+localHARDPaths = [
+    'graphs/san200_0.7_2.clq'
+    # 'graphs/gen200_p0.9_44.clq',
+    # 'graphs/gen200_p0.9_55.clq',
+    # 'graphs/san200_0.7_1.clq',
+    # 'graphs/san200_0.9_1.clq',
+    # 'graphs/san200_0.9_2.clq',
+    # 'graphs/san200_0.9_3.clq',
+    # 'graphs/sanr200_0.7.clq',
+    # 'graphs/C125.9.clq',
+    # 'graphs/keller4.clq',
+    # 'graphs/brock200_1.clq',
+    # 'graphs/brock200_3.clq',
+    # 'graphs/brock200_4.clq',
+    # 'graphs/p_hat300-2.clq'
+]
+
 # -----------------------------------------------TEST-------------------------------
 # matrixTest = np.zeros((4, 4))
 # matrixTest = np.array([
@@ -57,7 +76,7 @@ matrixTest = np.array([
 # -----------------------------------------------TEST-------------------------------
 
 
-
+#--------------------OPEN FILE--------------------
 def openGraph(filePath):
     n = -1
     m = -1
@@ -86,6 +105,13 @@ def openGraph(filePath):
             graphMatrix[j, i] = 1
     return n, m, graphMatrix
 
+
+#---------------------------------------------------------------------
+#----------------------Heuristic Functions--------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+# красим жадно
 def colorGreedy(matrix, edges):
     V = [i for i in range(edges)]
     colorGroups = [[]]
@@ -116,6 +142,8 @@ def colorGreedy(matrix, edges):
             coloredV[colorGroups[i][j]] = i
     return coloredV
 
+# находим узлы, которые связаны с бОльшим числом разноцветных соседей:
+# (начнем евристику с них)
 def getWithMaxColorNumber(matrix, n, coloredEdges):
     maxColorCount = 0
     maxColorCountEdges = []
@@ -131,6 +159,7 @@ def getWithMaxColorNumber(matrix, n, coloredEdges):
             maxColorCountEdges = [i]
     return maxColorCountEdges
 
+# эвристический поиск клики (с помощью раскрашенного графа)
 def findEvristicClique(maxColorCandidat, matrix, n, coloredEd):
     clickEvr = [maxColorCandidat]
     clickCandidat = []
@@ -163,7 +192,7 @@ def findEvristicClique(maxColorCandidat, matrix, n, coloredEd):
     return findClickEvr(clickEvr, clickCandidat, matrix)
 
 
-
+# запуск всего механизма эвристики
 def evristic(path):
 
     print('---evristic')
@@ -193,8 +222,7 @@ def evristic(path):
     for i in bestEvr:
         clickValue[i] = 1
 
-    print('')
-    print('')
+
     print('--------------- grath N ', path)
     print("--- %s seconds EVRISTIC---" % (time.time() - start_evr_time))
     print('coloredEd ', coloredEd)
@@ -203,9 +231,21 @@ def evristic(path):
     print('clickEvristicPower ', bestEvrValue)
     print(clickValue)
     print('--------------- grath N ', path)
+    print('')
+    print('')
 
     return bestEvrValue, clickValue, confusion_matrix, n
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
+#---------------------------------------------------------------------
 
+
+
+
+# Инициализируем модель cplex (добавляем все ограничения)
 def initalClickCPLEX(constrains,
             constrainsNames,
             constrainsTypes,
@@ -249,6 +289,12 @@ def initalClickCPLEX(constrains,
         result = result + v
     return values
 
+# ------------------------BNB----------------------------------
+# -------------------------------------------------------------
+# -------------------------------------------------------------
+# -------------------------------------------------------------
+# -------------------------------------------------------------
+# функция, которую запускаем в отедльном процессе, чтобы была возможность остановить по времени
 def bnbContainer(evristicPower, evristicValues, matrix, n, graph, return_dict):
     start_BNB_time = time.time()
     constrains = []
@@ -280,9 +326,11 @@ def bnbContainer(evristicPower, evristicValues, matrix, n, graph, return_dict):
     print('!!!!! result ', result)
     print('!!!!! resultValues ', resultValues)
 
+#     проход по всем графам из файлов и запуск эвристики и bnb для каждого
 def bnbStartEngine(graphs):
     for i in range(len(graphs)):
         evristicPower, evristicValues, matrix, n = evristic(graphs[i])
+        print('new ittt')
         if __name__ == '__main__':
             global timeLimitValue
             manager = multiprocessing.Manager()
@@ -299,6 +347,7 @@ def bnbStartEngine(graphs):
                 print('!!!!! TIMEOUT result ', return_dict['power'] )
                 print('!!!!! TIMEOUT resultValues ', return_dict['values'])
 
+# округление с учетом дельты
 def numberWithDelta(number, maxValue, minVale, eps):
     if number + eps >= maxValue:
         return maxValue
@@ -306,6 +355,7 @@ def numberWithDelta(number, maxValue, minVale, eps):
         return minVale
     return number
 
+# добавление ограничения
 def addConstrain(i,value,maxCliqueModel):
     maxCliqueModel.linear_constraints.add(
         lin_expr=[[["y" + str(i)], [1]]],
@@ -314,13 +364,16 @@ def addConstrain(i,value,maxCliqueModel):
         senses=['E']
     )
 
+# удаление ограничения
 def removeConstrain(i,maxCliqueModel):
     maxCliqueModel.linear_constraints.delete("constraint_" + str(i))
 
+# решение сиплексом
 def solveWithCPLX(maxCliqueModel):
     maxCliqueModel.solve()
     return maxCliqueModel.solution.get_values()
 
+# BNB
 def BNB(bestDecisionValue, maxCliqueModel, return_dict):
     global bestDecision
     currentDecisionValue = solveWithCPLX(maxCliqueModel)
@@ -367,7 +420,9 @@ def BNB(bestDecisionValue, maxCliqueModel, return_dict):
 
     removeConstrain(index, maxCliqueModel)
 
-bestDecision = 0
+    return bestDecision, bestDecisionValue
+
 # MAIN
 if __name__ == '__main__':
-    bnbStartEngine(localPath)
+    bnbStartEngine(localHARDPaths)
+    # bnbStartEngine(paths)
