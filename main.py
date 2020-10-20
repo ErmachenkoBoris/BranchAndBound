@@ -223,14 +223,14 @@ def evristic(path):
         clickValue[i] = 1
 
 
-    print('--------------- grath N ', path)
-    print("--- %s seconds EVRISTIC---" % (time.time() - start_evr_time))
-    print('coloredEd ', coloredEd)
-    print('maxColor ', maxColor)
-    print('bestEvr ', bestEvr)
-    print('clickEvristicPower ', bestEvrValue)
-    print(clickValue)
-    print('--------------- grath N ', path)
+    print('--------------- grath N ', path) # Название графа
+    print("--- %s seconds EVRISTIC---" % (time.time() - start_evr_time)) # время эвристики
+    print('coloredEd ', coloredEd) # раскраска графа
+    print('maxColor ', maxColor) # узлы с наибольшим количеством разноцветных соседей
+    print('bestEvr ', bestEvr) # решение клики
+    print('clickEvristicPower ', bestEvrValue) # количество узлов в клике
+    print(clickValue) # решение клики в 0,1
+    print('--------------- grath N ', path) # Название графа
     print('')
     print('')
 
