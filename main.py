@@ -3,9 +3,11 @@ import urllib.request
 import numpy as np
 import time
 import cplex
+import random
+import math
 
 # GLOBAL
-timeLimitValue = 3600
+timeLimitValue = 3600 * 3
 delta = 0.00001
 local = True
 bestDecision = 0
@@ -45,15 +47,16 @@ localPaths = [
 ]
 
 localHARDPaths = [
-    'graphs/san200_0.7_2.clq'
+    # 'graphs/san200_0.7_2.clq'
     # 'graphs/gen200_p0.9_44.clq',
     # 'graphs/gen200_p0.9_55.clq',
     # 'graphs/san200_0.7_1.clq',
     # 'graphs/san200_0.9_1.clq',
     # 'graphs/san200_0.9_2.clq',
-    # 'graphs/san200_0.9_3.clq',
+    'graphs/C125.9.clq',
+    'graphs/san200_0.9_3.clq',
     # 'graphs/sanr200_0.7.clq',
-    # 'graphs/C125.9.clq',
+
     # 'graphs/keller4.clq',
     # 'graphs/brock200_1.clq',
     # 'graphs/brock200_3.clq',
@@ -160,22 +163,60 @@ def getWithMaxColorNumber(matrix, n, coloredEdges):
     return maxColorCountEdges
 
 # эвристический поиск клики (с помощью раскрашенного графа)
-def findEvristicClique(maxColorCandidat, matrix, n, coloredEd):
-    clickEvr = [maxColorCandidat]
-    clickCandidat = []
-    for i in range(n):
-        if matrix[maxColorCandidat, i] == 1 and i != maxColorCandidat:
-            clickCandidat.append(i)
+def findEvristicClique(maxColorCandidatARRAY, matrix, n, coloredEd):
+    # print('erfsdfsdf ', maxColorCandidatARRAY)
+
+    # Находим соседей выбранных вершин и их пересечение в следующих циклах
+    lengthData = len(maxColorCandidatARRAY)
+    listOfNeiborsList = [[] for _ in range(0, lengthData)]
+    for j in range(len(maxColorCandidatARRAY)):
+        for i in range(n):
+            if matrix[maxColorCandidatARRAY[j], i] == 1 and i != maxColorCandidatARRAY[j]:
+                listOfNeiborsList[j].append(i)
+
+    clickEvr = []
+    clickCandidat = listOfNeiborsList[0]
+
+    # print('listOfNeiborsList ', listOfNeiborsList)
+    for k in range(lengthData):
+        clickCandidat = list(set(clickCandidat) & set(listOfNeiborsList[k]))
+
+    if(len(clickCandidat) > 0):
+        clickEvr = maxColorCandidatARRAY
+        # print(' !!!!-- > ',len(clickEvr))
+    else:
+        # print('gabella')
+        clickEvr = [random.choice(maxColorCandidatARRAY)]
+        for i in range(n):
+            if matrix[clickEvr[0], i] == 1 and i != clickEvr[0]:
+                clickCandidat.append(i)
 
     def findClickEvr(clickEvrF, clickCandidatF, matrix):
        maxColorLocalValue = -1
        maxColorLocal = clickCandidatF[0]
 
        # ищем максимального соседа
+       # for z in clickCandidatF:
+       #     if coloredEd[z] >=maxColorLocalValue and z not in clickEvrF:
+       #         maxColorLocalValue = coloredEd[z]
+       #         maxColorLocal.append(z)
+
+       # maxColorLocalArray = []
+       # for z in clickCandidatF:
+       #     if coloredEd[z] >=maxColorLocalValue and z not in clickEvrF:
+       #         if coloredEd[z] > maxColorLocalValue:
+       #             maxColorLocal=[]
+       #         maxColorLocalValue = coloredEd[z]
+       #         maxColorLocalArray.append(z)
+
+       clickCandidatFCLEAR = []
        for z in clickCandidatF:
-           if coloredEd[z] >=maxColorLocalValue and z not in clickEvrF:
-               maxColorLocalValue = coloredEd[z]
-               maxColorLocal = z
+           if z not in clickEvrF:
+               clickCandidatFCLEAR.append(z)
+
+
+       maxColorLocal = random.choice(clickCandidatFCLEAR)
+
        clickEvrF.append(maxColorLocal) # добавили в клику
 
        clickLocalCandidat = []  # ищем соседей новых
@@ -210,16 +251,25 @@ def evristic(path):
     maxColor = getWithMaxColorNumber(confusion_matrix.copy(), n, coloredEd)
 
     bestEvrValue = -1
-    bestEvr = []
+    bestEvrFinal = []
+    bestEvrStore = []
 
-    for i in range(min(100, len(maxColor))):
-        clickEvristic = findEvristicClique(maxColor[i], confusion_matrix.copy(), n, coloredEd)
-        if len(clickEvristic) > bestEvrValue:
+    print('--------------maxColor---------- ', len(maxColor))
+
+    for i in range(5000):
+        randomEdges = random.sample(maxColor, 3)
+        clickEvristic = findEvristicClique(randomEdges, confusion_matrix.copy(), n, coloredEd)
+        if len(clickEvristic) >= bestEvrValue:
+            if len(clickEvristic) > bestEvrValue:
+                bestEvrStore = []
             bestEvrValue = len(clickEvristic)
-            bestEvr = clickEvristic.copy()
+            bestEvrStore.append(clickEvristic)
+
+    bestEvrFinal = random.choice(bestEvrStore)
+    bestEvrValue = len(bestEvrFinal)
 
     clickValue = [0 for i in range(n)]
-    for i in bestEvr:
+    for i in bestEvrFinal:
         clickValue[i] = 1
 
 
@@ -227,7 +277,7 @@ def evristic(path):
     print("--- %s seconds EVRISTIC---" % (time.time() - start_evr_time)) # время эвристики
     print('coloredEd ', coloredEd) # раскраска графа
     print('maxColor ', maxColor) # узлы с наибольшим количеством разноцветных соседей
-    print('bestEvr ', bestEvr) # решение клики
+    print('bestEvr ', bestEvrFinal) # решение клики
     print('clickEvristicPower ', bestEvrValue) # количество узлов в клике
     print(clickValue) # решение клики в 0,1
     print('--------------- grath N ', path) # Название графа
@@ -385,7 +435,7 @@ def BNB(bestDecisionValue, maxCliqueModel, return_dict):
         currentDecision = currentDecision + currentDecisionValue[i]
 
     global delta
-    if currentDecision - delta <= bestDecision or currentDecision + delta <= bestDecision:
+    if math.floor(currentDecision + delta) <= bestDecision:
         return bestDecision, bestDecisionValue
 
     flag = False
@@ -396,7 +446,6 @@ def BNB(bestDecisionValue, maxCliqueModel, return_dict):
             break
     if index == N - 1 and flag == False:
         if currentDecision > bestDecision:
-
             print('new bestDecision ', bestDecision, currentDecision)
 
             bestDecision = currentDecision
